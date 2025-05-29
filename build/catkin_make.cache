@@ -1,0 +1,2 @@
+e2e_hpc
+-DCATKIN_DEVEL_PREFIX=/home/hvnbody/catkin_ws/devel -DCMAKE_INSTALL_PREFIX=/home/hvnbody/catkin_ws/install -G Unix Makefiles
