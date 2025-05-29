@@ -15,15 +15,15 @@ def parse_string_data(data):
     Returns a dictionary with parsed values or None if parsing fails.
     """
     try:
-        fields = data.strip("u")
+        fields = data.split('/')
         print(fields)
         parsed_data = {
             'ble_status': "Connected",
-            'system_time': fields[1],
-            'received_time': fields[2],
-            'firstPath_power': float(fields[3]),
-            'aoa': float(fields[4]),
-            'distance': float(fields[5])
+            'system_time': fields[-3],
+            'received_time': fields[-1],
+            'firstPath_power': float(fields[-8]),
+            'aoa': float(fields[-7]),
+            'distance': float(fields[-5])
         }
         return parsed_data
     except (IndexError, ValueError) as e:
@@ -83,30 +83,42 @@ def start_node_ethernet():
                             continue  # Skip empty lines
 
                         try:
+                            # rospy.loginfo("Received string data from {}: {}".format(addr, line))
+                            # ID = line.decode('utf-8').strip().split('/')[0]
+                            # print(line.decode('utf-8').strip().split('/'))
+                            # temp_data = (line.decode('utf-8').strip().split('/'))
+                            # if(float(ID) == 4.0):
+                            #     parsed_data = CustomMsg_Ranging()
+                            #     print("parsed_data1")
+                            #     parsed_data.ble_status = "Connected"
+                            #     parsed_data.system_time = int(temp_data[-3])
+                            #     parsed_data.received_time = int(temp_data[-1])
+                            #     print("parsed_data")
+                            #     parsed_data.firstPath_power = float(temp_data[-8])
+                                
+                            #     parsed_data.aoa = float(temp_data[-7])
+                            #     parsed_data.distance = float(temp_data[-5])*100
+                                
+                            #     print(parsed_data)
+                            #     if 1:
+                            #         # Create and publish the ROS message
+                            #         # ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
+                            #         ranging_pub.publish(parsed_data)
+                            #         rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
                             rospy.loginfo("Received string data from {}: {}".format(addr, line))
                             ID = line.decode('utf-8').strip().split('/')[0]
-                            print(line.decode('utf-8').strip().split('/'))
-                            temp_data = (line.decode('utf-8').strip().split('/'))
+                            parsed_data = parse_string_data(line.decode('utf-8').strip())
                             if(float(ID) == 4.0):
-                                parsed_data = CustomMsg_Ranging()
-                                print("parsed_data1")
-                                parsed_data.ble_status = "Connected"
-                                parsed_data.system_time = int(temp_data[-3])
-                                parsed_data.received_time = int(temp_data[-1])
-                                print("parsed_data")
-                                parsed_data.firstPath_power = float(temp_data[-8])
-                                
-                                parsed_data.aoa = float(temp_data[-7])
-                                parsed_data.distance = float(temp_data[-5])*100
-                                
                                 print(parsed_data)
-                                if 1:
+                                if parsed_data:
                                     # Create and publish the ROS message
-                                    # ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
-                                    ranging_pub.publish(parsed_data)
+                                    ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
+                                    ranging_pub.publish(ranging_msg)
                                     rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
                             elif(float(ID) == 5.0):
                                 pass
+                            
+                                
                         except Exception as e:
                             pass
                             # rospy.logerr("Error processing message from {}: {}".format(addr, e))
