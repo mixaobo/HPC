@@ -1,0 +1,6 @@
+string ble_status
+uint64 system_time
+uint64 received_time
+float64 firstPath_power
+float64 aoa
+float64 distance
