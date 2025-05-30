@@ -9,9 +9,7 @@ PORT = 100      # Port
 
 def parse_string_data(data):
     """
-    Parse the received string data in the format:
-    ble_status(string)/firstPath_power(float)/aoa(float)/distance(float)
-    Example: "Connected/12.34/56.78/9.01"
+    Parse the received string data in the format
     Returns a dictionary with parsed values or None if parsing fails.
     """
     try:

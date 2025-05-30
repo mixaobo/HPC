@@ -66,7 +66,7 @@ def sender_thread():
         payload = make_payload(alive_counter)
         try:
             response = requests.post(url="http://{}:{}/api/".format(HOST, PORT), json=payload)
-            print("Alive Counter: {} | Response: {} | Payload: {}".format(alive_counter, response.status_code, payload))
+            #print("Alive Counter: {} | Response: {} | Payload: {}".format(alive_counter, response.status_code, payload))
         except requests.RequestException as e:
             print("Failed to send payload: {}".format(e))
         alive_counter += 1
