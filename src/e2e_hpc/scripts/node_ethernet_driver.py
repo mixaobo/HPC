@@ -55,14 +55,14 @@ def start_node_ethernet():
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind((HOST, PORT))
         srv.listen(1)
-        rospy.loginfo("Node ethernet is listening on {}:{}".format(HOST, PORT))
+        #rospy.loginfo("Node ethernet is listening on {}:{}".format(HOST, PORT))
 
         # Main server loop: accept new connections
         while not rospy.is_shutdown():
             try:
                 conn, addr = srv.accept()  # Wait for a client connection
 
-                rospy.loginfo("Accepted connection from {}".format(addr))
+                #rospy.loginfo("Accepted connection from {}".format(addr))
                 buffer = b''  # Buffer for incoming data
 
                 # Connection loop: receive and process data from the client
@@ -71,7 +71,7 @@ def start_node_ethernet():
 
                     if not data:
                         # Client disconnected
-                        rospy.loginfo("Client {} disconnected.".format(addr))
+                        #rospy.loginfo("Client {} disconnected.".format(addr))
                         break
 
                     buffer += data  # Append received data to buffer
@@ -105,16 +105,19 @@ def start_node_ethernet():
                             #         # ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
                             #         ranging_pub.publish(parsed_data)
                             #         rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
-                            rospy.loginfo("Received string data from {}: {}".format(addr, line))
+                            
+                            #rospy.loginfo("Received string data from {}: {}".format(addr, line))
                             ID = line.decode('utf-8').strip().split('/')[0]
                             parsed_data = parse_string_data(line.decode('utf-8').strip())
                             if(float(ID) == 4.0):
                                 print(parsed_data)
                                 if parsed_data:
+                                    # Log out the system_time for manual checking
+                                    #rospy.loginfo("Time received from {}: {}".format(addr, parsed_data.get('system_time')))
                                     # Create and publish the ROS message
                                     ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
                                     ranging_pub.publish(ranging_msg)
-                                    rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
+                                    #rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
                             elif(float(ID) == 5.0):
                                 pass
                             

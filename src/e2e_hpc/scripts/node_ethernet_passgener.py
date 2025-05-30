@@ -1,11 +1,11 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3.9
 import socket
 import rospy
 from e2e_hpc.msg import CustomMsg_Ranging
 
 # Configuration for the TCP server
-HOST = '0.0.0.0' # Listen on all interfaces (replace with anchor IP if needed)
-PORT = 8888      # Port to listen on (replace with anchor port if needed)
+HOST = '192.168.8.147' # anchor IP address (change to the 2nd anchor IP)
+PORT = 100      # Port 
 
 def parse_string_data(data):
     """
@@ -18,10 +18,12 @@ def parse_string_data(data):
         fields = data.split('/')
         print(fields)
         parsed_data = {
-            'ble_status': fields[0],
-            'firstPath_power': float(fields[1]),
-            'aoa': float(fields[2]),
-            'distance': float(fields[3])
+            'ble_status': "Connected",
+            'system_time': fields[-3],
+            'received_time': fields[-1],
+            'firstPath_power': float(fields[-8]),
+            'aoa': float(fields[-7]),
+            'distance': float(fields[-5])
         }
         return parsed_data
     except (IndexError, ValueError) as e:
@@ -43,7 +45,7 @@ def start_node_ethernet():
     # Initialize the ROS node
     rospy.init_node('node_ethernet', anonymous=True)
     rospy.loginfo("Node Ethernet Started.")
-
+    ID = 0
     # Create a ROS publisher for the ranging topic
     ranging_pub = rospy.Publisher('topic_Ranging_Passenger', CustomMsg_Ranging, queue_size=10)
 
@@ -52,15 +54,15 @@ def start_node_ethernet():
     try:
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind((HOST, PORT))
-        srv.listen(5)
-        rospy.loginfo("Node ethernet is listening on {}:{}".format(HOST, PORT))
+        srv.listen(1)
+        #rospy.loginfo("Node ethernet is listening on {}:{}".format(HOST, PORT))
 
         # Main server loop: accept new connections
         while not rospy.is_shutdown():
             try:
                 conn, addr = srv.accept()  # Wait for a client connection
 
-                rospy.loginfo("Accepted connection from {}".format(addr))
+                #rospy.loginfo("Accepted connection from {}".format(addr))
                 buffer = b''  # Buffer for incoming data
 
                 # Connection loop: receive and process data from the client
@@ -69,7 +71,7 @@ def start_node_ethernet():
 
                     if not data:
                         # Client disconnected
-                        rospy.loginfo("Client {} disconnected.".format(addr))
+                        #rospy.loginfo("Client {} disconnected.".format(addr))
                         break
 
                     buffer += data  # Append received data to buffer
@@ -81,15 +83,48 @@ def start_node_ethernet():
                             continue  # Skip empty lines
 
                         try:
-                            rospy.loginfo("Received string data from {}: {}".format(addr, line))
-                            parsed_data = parse_string_data(line.decode('utf-8'))
-                            if parsed_data:
-                                # Create and publish the ROS message
-                                ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
-                                ranging_pub.publish(ranging_msg)
-                                rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
+                            # rospy.loginfo("Received string data from {}: {}".format(addr, line))
+                            # ID = line.decode('utf-8').strip().split('/')[0]
+                            # print(line.decode('utf-8').strip().split('/'))
+                            # temp_data = (line.decode('utf-8').strip().split('/'))
+                            # if(float(ID) == 4.0):
+                            #     parsed_data = CustomMsg_Ranging()
+                            #     print("parsed_data1")
+                            #     parsed_data.ble_status = "Connected"
+                            #     parsed_data.system_time = int(temp_data[-3])
+                            #     parsed_data.received_time = int(temp_data[-1])
+                            #     print("parsed_data")
+                            #     parsed_data.firstPath_power = float(temp_data[-8])
+                                
+                            #     parsed_data.aoa = float(temp_data[-7])
+                            #     parsed_data.distance = float(temp_data[-5])*100
+                                
+                            #     print(parsed_data)
+                            #     if 1:
+                            #         # Create and publish the ROS message
+                            #         # ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
+                            #         ranging_pub.publish(parsed_data)
+                            #         rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
+                            
+                            #rospy.loginfo("Received string data from {}: {}".format(addr, line))
+                            ID = line.decode('utf-8').strip().split('/')[0]
+                            parsed_data = parse_string_data(line.decode('utf-8').strip())
+                            if(float(ID) == 4.0):
+                                print(parsed_data)
+                                if parsed_data:
+                                    # Log out the system_time for manual checking
+                                    #rospy.loginfo("Time received from {}: {}".format(addr, parsed_data.get('system_time')))
+                                    # Create and publish the ROS message
+                                    ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
+                                    ranging_pub.publish(ranging_msg)
+                                    #rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
+                            elif(float(ID) == 5.0):
+                                pass
+                            
+                                
                         except Exception as e:
-                            rospy.logerr("Error processing message from {}: {}".format(addr, e))
+                            pass
+                            # rospy.logerr("Error processing message from {}: {}".format(addr, e))
 
             except socket.error as e:
                 # Handle socket errors (e.g., address in use)
@@ -110,7 +145,7 @@ def start_node_ethernet():
     finally:
         # Always close the server socket on exit
         srv.close()
-        rospy.loginfo("Node ethernet is shutting down.")
+        #rospy.loginfo("Node ethernet is shutting down.")
 
 if __name__ == '__main__':
     try:
