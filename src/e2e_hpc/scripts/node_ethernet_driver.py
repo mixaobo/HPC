@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.9
 import socket
 import rospy
+import time
 from e2e_hpc.msg import CustomMsg_Ranging
 
 # Configuration for the TCP server
@@ -112,8 +113,13 @@ def start_node_ethernet():
                                 if parsed_data:
                                     # Log out the system_time for manual checking
                                     #rospy.loginfo("Time received from {}: {}".format(addr, parsed_data.get('system_time')))
+                                    
                                     # Create and publish the ROS message
                                     ranging_msg = populate_message(CustomMsg_Ranging, parsed_data)
+                                    
+                                    # Get the HPC system time (nanoseconds since epoch uint64)
+                                    ranging_msg.hpc_system_time = int(time.time_ns())
+                                    
                                     ranging_pub.publish(ranging_msg)
                                     #rospy.loginfo("Published ranging message: \n{}".format(ranging_msg))
                             elif(float(ID) == 5.0):
