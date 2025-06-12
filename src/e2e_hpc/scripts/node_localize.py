@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 import rospy
 import threading
+import threading
 import numpy as np
 from e2e_hpc.msg import CustomMsg_Ranging
 from e2e_hpc.msg import CustomMsg_RSSI
@@ -227,6 +228,7 @@ def Node_Ranging():
     global pub_Localization_Driver, pub_Localization_Passenger
     #Initialize
     rospy.init_node('node_Ranging', anonymous=True)
+    rospy.init_node('node_Ranging', anonymous=True)
 
     #Publish to
     pub_Localization_Driver = rospy.Publisher('topic_Localization_Driver', CustomMsg_Ranging, queue_size=10)
@@ -234,6 +236,12 @@ def Node_Ranging():
 
     #Subscribe to
     rospy.Subscriber('topic_Ranging_Driver', CustomMsg_Ranging, Ranging_Driver_callback)
+    rospy.Subscriber('topic_Ranging_Passenger', CustomMsg_Ranging, Ranging_Passenger_callback)
+
+    # Start a background thread to keep the node alive
+    bg_thread = threading.Thread(target=background_thread)
+    bg_thread.daemon = True
+    bg_thread.start()
     rospy.Subscriber('topic_Ranging_Passenger', CustomMsg_Ranging, Ranging_Passenger_callback)
 
     # Start a background thread to keep the node alive
