@@ -3,7 +3,7 @@ import time
 
 # Server (receiver) details
 HOST = '192.168.8.71'  # Replace with the IP address of the receiver
-PORT = 100        # Replace with the port number of the receiver
+PORT = 101        # Replace with the port number of the receiver
 
 # Create a TCP socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
