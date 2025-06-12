@@ -1,8 +1,0 @@
-prefix=/home/hvnbody/catkin_ws/install
-
-Name: e2e_hpc
-Description: Description of e2e_hpc
-Version: 0.0.0
-Cflags: -I${prefix}/include
-Libs: -L${prefix}/lib -le2e_hpc
-Requires: roscpp rospy std_msgs message_runtime
