@@ -8,7 +8,7 @@ import requests
 from e2e_hpc.msg import CustomMsg_Ranging  # Adjust if needed
 from e2e_hpc.msg import CustomMsg_Door  # Replace with your actual vehicle status msg
 
-HOST = '192.168.8.175' # server IP address
+HOST = '192.168.8.184' # server IP address
 PORT = 80            # server port
 
 latest_localization = None

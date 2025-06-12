@@ -1,7 +1,11 @@
 #!/usr/bin/env python2
 import rospy
+import threading
 import numpy as np
 from e2e_hpc.msg import CustomMsg_Ranging
+from e2e_hpc.msg import CustomMsg_RSSI
+
+
 
 
 
@@ -27,6 +31,10 @@ anchor1 = np.array([0.0, 0.0])  # Fixed anchor position
 Sync_Flag = [0,0]
 RangingMsg_Passenger = CustomMsg_Ranging()
 RangingMsg_Driver = CustomMsg_Ranging()
+RangingMsg_Passenger_Event = threading.Event()
+RangingMsg_Driver_Event = threading.Event()
+threading_lock = threading.Lock()
+
 
 
 def wrap_angle_radians(angle):
@@ -84,99 +92,141 @@ class ExtendedKalmanFilter:
     def current_position(self):
         return self.x
 
-def Ranging_callback(msg):
-    global pub_Localization_Driver, pub_Localization_Passenger, RangingMsg_Driver, RangingMsg_Passenger
-    
-    """ For Driver Anchor"""
-    d = RangingMsg_Driver.distance
-    aoa_rad = np.deg2rad(RangingMsg_Driver.aoa)
+class ExtendedKalmanFilterPolar:
+    def __init__(self, x_init, P_init, Q, R):
+        self.x = x_init  # [distance, aoa_rad]
+        self.P = P_init
+        self.Q = Q
+        self.R = R
+
+    def predict(self):
+        # For static or simple motion, prediction may be identity
+        self.P = self.P + self.Q
+
+    def update(self, z):
+        # z = [measured_distance, measured_aoa_rad]
+        y = z - self.x
+        y[1] = wrap_angle_radians(y[1])  # Ensure angle difference is wrapped
+
+        H = np.eye(2)  # Measurement matrix is identity
+        S = np.dot(np.dot(H, self.P), H.T) + self.R
+        K = np.dot(np.dot(self.P, H.T), np.linalg.inv(S))
+        self.x = self.x + np.dot(K, y)
+        self.x[1] = wrap_angle_radians(self.x[1])  # Keep angle in [-pi, pi]
+        self.P = np.dot((np.eye(2) - np.dot(K, H)), self.P)
+
+    def current_position(self):
+        # Returns distance and AoA in degrees
+        return self.x[0], np.rad2deg(self.x[1])
+
+def Ranging_callback(ekf_class, msg, publish_to_node):
+    d = msg.distance
+    aoa_rad = np.deg2rad(msg.aoa)
     z = np.array([d, aoa_rad])
-    ekf_driver.predict()
-    ekf_driver.update(z, anchor1)
+    ekf_class.predict()
+    ekf_class.update(z)
     
     #Debug msg
-    received_xy_Driver = calculate_initial_guess(anchor1, RangingMsg_Driver.distance, RangingMsg_Driver.aoa)
-    print("Received Index  {} / {} / {} ".format(RangingMsg_Driver.distance, RangingMsg_Driver.aoa, received_xy_Driver))
-    predict_xy_Driver = ekf_driver.current_position()
-    deviation = np.abs((np.linalg.norm(predict_xy_Driver) - np.linalg.norm(received_xy_Driver)))
-    # if (deviation >= 5):
-    #     print("Deviation too large, ignoring prediction")
-    # else:
-    #public position to other node
+    received_xy = calculate_initial_guess(anchor1, msg.distance, msg.aoa)
+    #print("Kalman input  {} / {}".format(msg.distance, msg.aoa))
+    predict_distance, predict_angle = ekf_class.current_position()
+    
+    #predict_distance, predict_angle = calcualte_distance_angle(0, 0, predict_xy[0], predict_xy[1])
     msg_localization = CustomMsg_Ranging()
-    predict_distance_Driver, predict_angle_Driver = calcualte_distance_angle(0, 0, predict_xy_Driver[0], predict_xy_Driver[1])
-    print("Predicted Index  {} / {} / {} ".format(predict_distance_Driver, predict_angle_Driver, predict_xy_Driver))
-    msg_localization.system_time = RangingMsg_Driver.system_time
-    msg_localization.received_time = RangingMsg_Driver.received_time
-    msg_localization.firstPath_power = RangingMsg_Driver.firstPath_power
-    msg_localization.distance = predict_distance_Driver
-    msg_localization.aoa = predict_angle_Driver
-    pub_Localization_Driver.publish(msg_localization)
-    print("------------")
-    
-    
-    """ For Passenger Anchor"""
-    """
-    d = RangingMsg_Passenger.distance
-    aoa_rad = np.deg2rad(RangingMsg_Passenger.aoa)
-    z = np.array([d, aoa_rad])
-    ekf_passenger.predict()
-    ekf_passenger.update(z, anchor1)
-    
-    #Debug msg
-    received_xy_Passenger = calculate_initial_guess(anchor1, RangingMsg_Passenger.distance, RangingMsg_Passenger.aoa)
-    print("Received Index  {} / {} / {} ".format(RangingMsg_Passenger.distance, RangingMsg_Passenger.aoa, received_xy_Passenger))
-    predict_xy_Passenger = ekf_passenger.current_position()
-    deviation = np.abs((np.linalg.norm(predict_xy_Passenger) - np.linalg.norm(received_xy_Passenger)))
-    if (deviation >= 5):
-        print("Deviation too large, ignoring prediction")
-    else:
-        #public position to other node
-        msg_localization = CustomMsg_Ranging()
-        predict_distance_Passenger, predict_angle_Passenger = calcualte_distance_angle(0, 0, predict_xy_Passenger[0], predict_xy_Passenger[1])
-        print("Predicted Index  {} / {} / {} ".format(predict_distance_Passenger, predict_angle_Passenger, predict_xy_Passenger))
-        msg_localization.system_time = RangingMsg_Passenger.system_time
-        msg_localization.received_time = RangingMsg_Passenger.received_time
-        msg_localization.firstPath_power = RangingMsg_Passenger.firstPath_power
-        msg_localization.distance = predict_distance_Passenger
-        msg_localization.aoa = predict_angle_Passenger
-        pub_Localization_Passenger.publish(msg_localization)
-    print("------------")
-    """
-    
+    msg_localization = msg
+    msg_localization.distance = predict_distance
+    msg_localization.aoa = predict_angle
+    publish_to_node.publish(msg_localization)  
+    print("Kalman output timestamp {} / {} / {} / timestamp".format(msg.hpc_system_time, predict_distance, predict_angle))
+    print("------------")    
 
-    
+counter_passenger = 0
+current_aoa_passenger = 0.0
+previous_aoa_passenger = 0.0
 def Ranging_Passenger_callback(msg):
-    global RangingMsg_Passenger, Sync_Flag
-    RangingMsg_Passenger.system_time = msg.system_time
-    RangingMsg_Passenger.received_time = msg.received_time
-    RangingMsg_Passenger.firstPath_power = msg.firstPath_power
-    RangingMsg_Passenger.aoa = msg.aoa
-    RangingMsg_Passenger.distance = msg.distance
-    Sync_Flag[0] = 1
-    if(Sync_Flag[0] == 1) or (Sync_Flag[1] == 1):
-        Ranging_callback(RangingMsg_Passenger)
-        Sync_Flag[0] = 0
-        Sync_Flag[1] = 0
-    
-def Ranging_Driver_callback(msg):
-    global RangingMsg_Driver, Sync_Flag
-    RangingMsg_Driver.system_time = msg.system_time
-    RangingMsg_Driver.received_time = msg.received_time
-    RangingMsg_Driver.firstPath_power = msg.firstPath_power
-    RangingMsg_Driver.aoa = msg.aoa
-    RangingMsg_Driver.distance = msg.distance
-    Ranging_callback(RangingMsg_Driver)
-    # Sync_Flag[1] = 1
-    # if(Sync_Flag[0] == 1) or (Sync_Flag[1] == 1):
-    #     
-    #     Sync_Flag[0] = 0
-    #     Sync_Flag[1] = 0
+    global RangingMsg_Passenger, counter_passenger, current_aoa_passenger, previous_aoa_passener, ekf_passenger
+    print("Passenger received value  {} / {}".format(msg.distance, msg.aoa))
+    current_aoa_passenger = msg.aoa
+    if (counter_passenger >= 5):
+        if(counter_passenger == 5):
+            previous_aoa_passener = current_aoa_passenger
+            ekf_passenger = ExtendedKalmanFilterPolar(
+            x_init=[msg.distance, current_aoa_passenger],
+            P_init=np.eye(2) * 100,
+            Q=np.eye(2) * 5.0,
+            R=np.diag([10, np.deg2rad(3.0)**2]) #(cm, aoa)
+            )
+        counter_passenger = 11
+        # if (previous_aoa_passener >= 50):
+        #     if (-70 <= current_aoa_passenger <= -50):
+        #         current_aoa_passenger = previous_aoa_passener
 
-def Node_localize():
+        if (np.abs(previous_aoa_passener - current_aoa_passenger) > 60):
+            msg.aoa = previous_aoa_passener
+            
+        else:
+            previous_aoa_passener = current_aoa_passenger
+            
+        with threading_lock:
+            RangingMsg_Passenger = msg
+        RangingMsg_Passenger_Event.set()
+    counter_passenger += 1
+
+counter_driver = 0
+current_aoa_driver = 0.0
+previous_aoa_driver = 0.0
+def Ranging_Driver_callback(msg):
+    global RangingMsg_Driver, counter_driver, current_aoa_driver, previous_aoa_driver, ekf_driver
+    print("Driver received value  {} / {}".format(msg.distance, msg.aoa))
+    current_aoa_driver = msg.aoa
+    if (counter_driver >= 5):
+        if(counter_driver == 5):
+            previous_aoa_driver = current_aoa_driver
+            ekf_driver = ExtendedKalmanFilterPolar(
+            x_init=[msg.distance, current_aoa_driver],
+            P_init=np.eye(2) * 100,
+            Q=np.eye(2) * 5.0,
+            R=np.diag([10, np.deg2rad(3.0)**2]) #(cm, aoa)
+            )
+        counter_driver = 11
+        # if (previous_aoa_driver >= 50):
+        #     if (-70 <= current_aoa_driver <= -50):
+        #         current_aoa_driver = previous_aoa_driver
+
+        if (np.abs(previous_aoa_driver - current_aoa_driver) > 60):
+            msg.aoa = previous_aoa_driver
+            
+        else:
+            previous_aoa_driver = current_aoa_driver
+            
+        with threading_lock:
+            RangingMsg_Driver = msg
+        RangingMsg_Driver_Event.set()
+    counter_driver += 1
+
+def background_thread():
+    global ekf_driver, ekf_passenger, pub_Localization_Driver, pub_Localization_Passenger, RangingMsg_Driver, RangingMsg_Passenger
+
+    while not rospy.is_shutdown():
+        if(RangingMsg_Driver_Event.wait(timeout=0.01) == True):
+            with threading_lock:
+                Ranging_callback(ekf_driver, RangingMsg_Driver, pub_Localization_Driver)
+                RangingMsg_Driver_Event.clear()
+        if(RangingMsg_Passenger_Event.wait(timeout=0.01) == True):
+            with threading_lock:    
+                Ranging_callback(ekf_passenger, RangingMsg_Passenger, pub_Localization_Passenger)
+                RangingMsg_Passenger_Event.clear()
+        if rospy.is_shutdown():
+            break
+        
+            
+        
+        
+
+def Node_Ranging():
     global pub_Localization_Driver, pub_Localization_Passenger
     #Initialize
-    rospy.init_node('node_Localization', anonymous=True)
+    rospy.init_node('node_Ranging', anonymous=True)
 
     #Publish to
     pub_Localization_Driver = rospy.Publisher('topic_Localization_Driver', CustomMsg_Ranging, queue_size=10)
@@ -184,28 +234,21 @@ def Node_localize():
 
     #Subscribe to
     rospy.Subscriber('topic_Ranging_Driver', CustomMsg_Ranging, Ranging_Driver_callback)
-    #rospy.Subscriber('topic_Ranging_Passenger', CustomMsg_Ranging, Ranging_Passenger_callback)
+    rospy.Subscriber('topic_Ranging_Passenger', CustomMsg_Ranging, Ranging_Passenger_callback)
+
+    # Start a background thread to keep the node alive
+    bg_thread = threading.Thread(target=background_thread)
+    bg_thread.daemon = True
+    bg_thread.start()
     print("Start node")
     rospy.spin()
+
 
 # Initial state
 # P:  < 1: trust more on inital predictions / ~5: balance / >10: trust more on measurements
 # Q: 0.01: standstill/ 0.1: Slow movement / fast movement 0.3 ~ 0.5 / Vehicle: 1.0+
 # R Small: trust measurrements / Large: trust predictions. variance = standard_deviation**2
 initial_x = calculate_initial_guess(anchor1, 10, 40)
-ekf_driver = ExtendedKalmanFilter(
-    x_init=initial_x,
-    P_init=np.eye(2) * 100,
-    Q=np.eye(2) * 5.0,
-    R=np.diag([5**2, np.deg2rad(5.0)**2]) #(cm, aoa)
-)
-
-ekf_passenger = ExtendedKalmanFilter(
-    x_init=initial_x,
-    P_init=np.eye(2) * 100,
-    Q=np.eye(2) * 5.0,
-    R=np.diag([5**2, np.deg2rad(5.0)**2]) #(cm, aoa)
-)
 
 if __name__ == '__main__':
-    Node_localize()
+    Node_Ranging()

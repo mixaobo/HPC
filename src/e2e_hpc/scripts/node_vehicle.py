@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3.9
 import rospy
 from e2e_hpc.msg import CustomMsg_Door
 from e2e_hpc.msg import CustomMsg_Ranging

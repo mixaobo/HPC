@@ -54,6 +54,7 @@ add_message_files(
   CustomMsg_Door.msg
   CustomMsg_Ranging.msg
   CustomMsg_Connection.msg
+  CustomMsg_RSSI.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -170,6 +171,9 @@ catkin_install_python(PROGRAMS
   scripts/node_server.py
   scripts/node_vehicle.py
   scripts/talker_e2e.py
+  scripts/ethernet_send.py
+  scripts/ethernet_send_debug.py
+  scripts/node_ethernet_driver_debug.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
